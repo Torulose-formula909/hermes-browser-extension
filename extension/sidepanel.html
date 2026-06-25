@@ -43,18 +43,18 @@
           <p class="eyebrow">PUBLIC SETUP</p>
           <h2>Connect to Hermes</h2>
           <ol>
-            <li>Install Hermes Agent/Desktop and keep the local gateway running.</li>
+            <li>Start the Hermes API server locally or on a reachable remote machine.</li>
             <li>Clone this repo, build it, and load the <code>dist/</code> folder unpacked.</li>
             <li>Open the Hermes extension side panel from your browser toolbar.</li>
-            <li>Click Connect to Hermes, or use Manual setup with your local API key.</li>
-            <li>Approve locally if prompted, then open a normal web page.</li>
+            <li>Click Connect to Hermes, or use Manual setup with a local/remote Gateway URL and token.</li>
+            <li>Approve pairing when available, or paste <code>API_SERVER_KEY</code> for manual setup.</li>
             <li>Ask Hermes about the active page context.</li>
           </ol>
           <div class="connect-actions">
             <button id="connectButton" type="button">Connect to Hermes</button>
             <button id="manualSettingsButton" class="secondary" type="button">Manual setup</button>
           </div>
-          <p id="connectStatus" class="hint">Public alpha: load unpacked, local-first, read-only browser context.</p>
+          <p id="connectStatus" class="hint">Public alpha: load unpacked, local or remote Hermes API server, read-only browser context.</p>
         </section>
 
         <section class="hero-card" aria-label="Hermes Browser intro">
@@ -234,15 +234,24 @@
         <section class="settings-section connection-settings" aria-labelledby="connectionTitle">
           <div class="settings-section-head">
             <div>
-              <h3 id="connectionTitle">Local Connection</h3>
-              <p>Connect Hermes Browser Extension to the local Hermes Agent gateway.</p>
+              <h3 id="connectionTitle">Gateway Connection</h3>
+              <p>Connect Hermes Browser Extension to a local or remote Hermes API server.</p>
             </div>
           </div>
+
+        <label>
+          Gateway mode
+          <select id="gatewayModeInput" name="gatewayMode">
+            <option value="local-api">Local API server on this machine</option>
+            <option value="remote-api">Remote API server on another machine</option>
+          </select>
+        </label>
 
         <label>
           Gateway URL
           <input id="gatewayUrlInput" name="gatewayUrl" type="url" placeholder="http://127.0.0.1:8642" />
         </label>
+        <p id="gatewayHelp" class="hint">Local setup: keep Hermes Gateway/API Server running on this machine.</p>
 
         <label>
           API key / browser token
@@ -279,7 +288,7 @@
           <label><input id="includeSelectedTextInput" type="checkbox" /> Include selected text</label>
         </div>
 
-        <p class="hint">Public flow: Connect to Hermes creates a scoped browser token. Manual setup can still paste API_SERVER_KEY for local dev.</p>
+        <p class="hint">Public flow: Connect to Hermes creates a scoped browser token when the API server supports pairing. For remote hosts, set API_SERVER_CORS_ORIGINS to this extension origin and use a strong API_SERVER_KEY or scoped token.</p>
         </section>
 
         <footer>

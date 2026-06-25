@@ -6,6 +6,7 @@ import { spawnSync } from 'node:child_process';
 import {
   DEFAULT_SETTINGS,
   AUDIO_TRANSCRIBE_ENDPOINT,
+  GATEWAY_MODES,
   appendOpenAiChunkText,
   buildAudioTranscriptionBody,
   buildHermesModelOptions,
@@ -15,6 +16,7 @@ import {
   estimateContextWindow,
   extractAssistantText,
   formatContextMeter,
+  gatewayConnectionSummary,
   formatYoutubeTranscript,
   groupModelsForMenu,
   groupSessionsForMenu,
@@ -111,6 +113,37 @@ test('isRestrictedUrl blocks browser internals and sensitive account categories'
   assert.equal(isRestrictedUrl('chrome://extensions'), true);
   assert.equal(isRestrictedUrl('https://mybank.example.com/accounts'), true);
   assert.equal(isRestrictedUrl('https://github.com/NousResearch/hermes-agent'), false);
+});
+
+test('gateway settings support explicit local and remote Hermes API servers', () => {
+  assert.deepEqual(GATEWAY_MODES.map((mode) => mode.value), ['local-api', 'remote-api']);
+  assert.equal(DEFAULT_SETTINGS.gatewayMode, 'local-api');
+
+  const remote = gatewayConnectionSummary({
+    gatewayMode: 'remote-api',
+    gatewayUrl: 'https://agent.example.com/hermes/v1',
+    extensionOrigin: 'chrome-extension://abc123/',
+  });
+  assert.equal(remote.mode.value, 'remote-api');
+  assert.equal(remote.normalizedUrl, 'https://agent.example.com/hermes');
+  assert.match(remote.title, /Remote Hermes API server/);
+  assert.match(remote.setupHint, /API_SERVER_HOST=0\.0\.0\.0/);
+  assert.match(remote.setupHint, /API_SERVER_CORS_ORIGINS=chrome-extension:\/\/abc123/);
+  assert.match(remote.setupHint, /API_SERVER_KEY/);
+
+  const local = gatewayConnectionSummary({ gatewayMode: 'nonsense', gatewayUrl: '' });
+  assert.equal(local.mode.value, 'local-api');
+  assert.equal(local.normalizedUrl, 'http://127.0.0.1:8642');
+});
+
+test('manifest allows remote Hermes API server connections from extension pages', () => {
+  const manifest = JSON.parse(readFileSync(new URL('../extension/manifest.json', import.meta.url), 'utf8'));
+  const csp = manifest.content_security_policy.extension_pages;
+  assert.match(csp, /connect-src/);
+  assert.match(csp, /http:/);
+  assert.match(csp, /https:/);
+  assert.ok(manifest.host_permissions.includes('http://*/*'));
+  assert.ok(manifest.host_permissions.includes('https://*/*'));
 });
 
 test('summarizeTabs highlights active tab and limits tab output', () => {

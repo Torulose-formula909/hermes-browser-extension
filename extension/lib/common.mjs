@@ -1,3 +1,18 @@
+export const GATEWAY_MODES = Object.freeze([
+  {
+    value: 'local-api',
+    label: 'Local API server',
+    title: 'Local Hermes API server',
+    defaultUrl: 'http://127.0.0.1:8642',
+  },
+  {
+    value: 'remote-api',
+    label: 'Remote API server',
+    title: 'Remote Hermes API server',
+    defaultUrl: 'https://your-hermes-host.example.com',
+  },
+]);
+
 export const MODEL_EFFORTS = Object.freeze([
   { value: 'minimal', label: 'Minimal' },
   { value: 'low', label: 'Low' },
@@ -7,6 +22,7 @@ export const MODEL_EFFORTS = Object.freeze([
 ]);
 
 export const DEFAULT_SETTINGS = Object.freeze({
+  gatewayMode: 'local-api',
   gatewayUrl: 'http://127.0.0.1:8642',
   apiKey: '',
   sessionId: 'hermes-browser-extension',
@@ -83,6 +99,38 @@ const SENSITIVE_URL_PATTERNS = [
 export function normalizeGatewayUrl(value = DEFAULT_SETTINGS.gatewayUrl) {
   const raw = String(value || '').trim() || DEFAULT_SETTINGS.gatewayUrl;
   return raw.replace(/\/+$/, '').replace(/\/v1$/i, '');
+}
+
+export function normalizeGatewayMode(value = DEFAULT_SETTINGS.gatewayMode) {
+  const normalized = String(value || '').trim().toLowerCase();
+  return GATEWAY_MODES.some((mode) => mode.value === normalized) ? normalized : DEFAULT_SETTINGS.gatewayMode;
+}
+
+export function gatewayModeDetails(value = DEFAULT_SETTINGS.gatewayMode) {
+  const normalized = normalizeGatewayMode(value);
+  return GATEWAY_MODES.find((mode) => mode.value === normalized) || GATEWAY_MODES[0];
+}
+
+export function normalizedExtensionOrigin(value = '') {
+  return String(value || '').trim().replace(/\/+$/, '');
+}
+
+export function gatewayConnectionSummary({ gatewayMode = DEFAULT_SETTINGS.gatewayMode, gatewayUrl = DEFAULT_SETTINGS.gatewayUrl, extensionOrigin = '' } = {}) {
+  const mode = gatewayModeDetails(gatewayMode);
+  const normalizedUrl = normalizeGatewayUrl(gatewayUrl || mode.defaultUrl || DEFAULT_SETTINGS.gatewayUrl);
+  const origin = normalizedExtensionOrigin(extensionOrigin);
+  const corsOrigin = origin || 'chrome-extension://<extension-id>';
+  const isRemote = mode.value === 'remote-api';
+  const setupHint = isRemote
+    ? `Remote Hermes API setup: run the API server on the host machine with API_SERVER_ENABLED=true, API_SERVER_HOST=0.0.0.0, API_SERVER_PORT=8642, API_SERVER_KEY=<strong-token>, and API_SERVER_CORS_ORIGINS=${corsOrigin}. Put it behind Tailscale/VPN/HTTPS instead of exposing it naked to the public internet.`
+    : 'Local setup: keep Hermes Gateway/API Server running on this machine. Default URL is http://127.0.0.1:8642 and auth uses a scoped browser token or API_SERVER_KEY for manual setup.';
+  return {
+    mode,
+    normalizedUrl,
+    title: mode.title,
+    statusText: `${mode.title}: ${normalizedUrl}`,
+    setupHint,
+  };
 }
 
 export function clampText(value = '', maxChars = 12_000) {

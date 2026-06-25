@@ -16,13 +16,17 @@
   },
   "scripts": {
     "test": "node --test tests/*.test.mjs",
-    "check:js": "node --check extension/sidepanel.js && node --check extension/background.js && node --check extension/content.js && node --check extension/lib/common.mjs && node --check scripts/windows-setup.mjs",
+    "check:js": "node --check extension/sidepanel.js && node --check extension/background.js && node --check extension/content.js && node --check extension/lib/common.mjs && node --check scripts/windows-setup.mjs && node --check scripts/hermes-review-github-event.mjs && node --check scripts/hermes-review-watch.mjs",
     "check:manifest": "node scripts/check-manifest.mjs",
     "verify": "npm run test && npm run check:js && npm run check:manifest",
     "build": "node scripts/build.mjs",
     "setup:windows": "node scripts/windows-setup.mjs",
     "setup:windows:dry-run": "node scripts/windows-setup.mjs --dry-run --json",
-    "package": "npm run build && node scripts/package.mjs"
+    "package": "npm run build && node scripts/package.mjs",
+    "review:event": "node scripts/hermes-review-github-event.mjs",
+    "review:event:dry-run": "node scripts/hermes-review-github-event.mjs --dry-run",
+    "review:watch": "node scripts/hermes-review-watch.mjs",
+    "review:watch:dry-run": "node scripts/hermes-review-watch.mjs --dry-run"
   },
   "engines": {
     "node": ">=20"

@@ -14,6 +14,7 @@ import {
   estimateTokens,
   extractAssistantText,
   formatContextMeter,
+  gatewayConnectionSummary,
   groupModelsForMenu,
   groupSessionsForMenu,
   isMicrophonePermissionError,
@@ -25,6 +26,7 @@ import {
   normalizeHermesSessions,
   normalizeHermesSkills,
   normalizeExtensionVersion,
+  normalizeGatewayMode,
   normalizeGatewayUrl,
   normalizeReasoningEffort,
   reasoningEffortShortLabel,
@@ -103,7 +105,9 @@ const els = {
   contextMeterFill: $('#contextMeterFill'),
   contextPopover: $('#contextPopover'),
   contextBreakdown: $('#contextBreakdown'),
+  gatewayModeInput: $('#gatewayModeInput'),
   gatewayUrlInput: $('#gatewayUrlInput'),
+  gatewayHelp: $('#gatewayHelp'),
   apiKeyInput: $('#apiKeyInput'),
   sessionIdInput: $('#sessionIdInput'),
   sessionTitleInput: $('#sessionTitleInput'),
@@ -174,6 +178,32 @@ function renderVersionInfo(statusText = '') {
   }
 }
 
+function currentExtensionOrigin() {
+  try {
+    const url = globalThis.chrome?.runtime?.getURL?.('') || '';
+    return url.replace(/\/+$/, '');
+  } catch {
+    return '';
+  }
+}
+
+function currentGatewaySummary(overrides = {}) {
+  return gatewayConnectionSummary({
+    gatewayMode: overrides.gatewayMode ?? settings.gatewayMode,
+    gatewayUrl: overrides.gatewayUrl ?? settings.gatewayUrl,
+    extensionOrigin: currentExtensionOrigin(),
+  });
+}
+
+function renderGatewayHelp() {
+  const summary = currentGatewaySummary({
+    gatewayMode: els.gatewayModeInput?.value || settings.gatewayMode,
+    gatewayUrl: els.gatewayUrlInput?.value || settings.gatewayUrl,
+  });
+  if (els.gatewayHelp) els.gatewayHelp.textContent = summary.setupHint;
+  if (els.gatewayUrlInput) els.gatewayUrlInput.placeholder = summary.mode.defaultUrl || DEFAULT_SETTINGS.gatewayUrl;
+}
+
 async function checkForUpdates() {
   if (!els.checkUpdatesButton) return;
   els.checkUpdatesButton.disabled = true;
@@ -205,14 +235,15 @@ async function checkForUpdates() {
 
 function updateConnectionPrompt() {
   const connected = Boolean(settings.apiKey);
+  const summary = currentGatewaySummary();
   els.connectPanel.hidden = connected;
   els.connectionPill.textContent = '●';
   els.connectionPill.className = `connection-pill ${connected ? 'ok' : 'warn'}`;
-  els.connectionPill.title = connected ? `Connected to ${normalizeGatewayUrl(settings.gatewayUrl)}` : 'Not connected to Hermes';
+  els.connectionPill.title = connected ? `Connected to ${summary.normalizedUrl}` : 'Not connected to Hermes';
   els.connectionPill.setAttribute('aria-label', connected ? 'Hermes connected' : 'Hermes not connected');
   if (!connected) {
     els.sendButton.textContent = 'Connect first';
-    setStatus('warn', 'Connect Hermes Desktop', 'Click Connect to Hermes, approve locally, then start chatting.');
+    setStatus('warn', 'Connect Hermes', `${summary.title}. Click Connect to Hermes or use Manual setup.`);
   } else {
     els.sendButton.textContent = sending ? 'Queue message' : 'Ask Hermes';
   }
@@ -1791,6 +1822,8 @@ async function loadSettings() {
   settings = {
     ...settings,
     thinkingEnabled: settings.thinkingEnabled !== false,
+    gatewayMode: normalizeGatewayMode(settings.gatewayMode),
+    gatewayUrl: normalizeGatewayUrl(settings.gatewayUrl),
     fastMode: Boolean(settings.fastMode),
     reasoningEffort: migrateDesktopOptionDefaults ? DEFAULT_SETTINGS.reasoningEffort : normalizeReasoningEffort(settings.reasoningEffort),
     modelOptionsVersion: DEFAULT_SETTINGS.modelOptionsVersion,
@@ -1819,7 +1852,9 @@ function syncSettingsForm() {
   renderAppearanceControls();
   renderProfiles();
   renderModelOptions(availableModels);
+  if (els.gatewayModeInput) els.gatewayModeInput.value = settings.gatewayMode || DEFAULT_SETTINGS.gatewayMode;
   els.gatewayUrlInput.value = settings.gatewayUrl;
+  renderGatewayHelp();
   els.apiKeyInput.value = settings.apiKey || '';
   els.sessionIdInput.value = settings.sessionId;
   els.sessionTitleInput.value = settings.sessionTitle;
@@ -1834,6 +1869,7 @@ async function saveSettingsFromForm() {
   const selected = availableModels.find((model) => model.id === settings.model);
   settings = {
     ...settings,
+    gatewayMode: normalizeGatewayMode(els.gatewayModeInput?.value || settings.gatewayMode),
     gatewayUrl: normalizeGatewayUrl(els.gatewayUrlInput.value),
     apiKey: els.apiKeyInput.value.trim(),
     model: settings.model || DEFAULT_SETTINGS.model,
@@ -2340,12 +2376,14 @@ async function pollPairing(pairingId, { attempts = 90, delay = 1500 } = {}) {
 
 async function connectToHermes() {
   settings.gatewayUrl = normalizeGatewayUrl(settings.gatewayUrl || els.gatewayUrlInput.value || DEFAULT_SETTINGS.gatewayUrl);
+  settings.gatewayMode = normalizeGatewayMode(settings.gatewayMode || els.gatewayModeInput?.value || DEFAULT_SETTINGS.gatewayMode);
+  const summary = currentGatewaySummary();
   els.connectButton.disabled = true;
   els.connectButton.textContent = 'Connecting...';
-  els.connectStatus.textContent = 'Looking for Hermes Desktop on localhost...';
+  els.connectStatus.textContent = `Looking for ${summary.title} at ${summary.normalizedUrl}...`;
   try {
     const health = await publicApiFetch('/health', { method: 'GET' });
-    if (!health.ok) throw new Error(`Hermes Desktop API is not reachable (${health.status}).`);
+    if (!health.ok) throw new Error(`Hermes API server is not reachable (${health.status}).`);
 
     const start = await publicApiFetch('/api/browser-extension/pair/start', {
       method: 'POST',
@@ -2729,6 +2767,14 @@ function bindEvents() {
     els.contextBarButton.setAttribute('aria-expanded', String(!nextHidden));
   });
   els.testConnectionButton.addEventListener('click', testConnection);
+  els.gatewayModeInput?.addEventListener('change', () => {
+    const summary = currentGatewaySummary({ gatewayMode: els.gatewayModeInput.value, gatewayUrl: els.gatewayUrlInput.value });
+    if (!els.gatewayUrlInput.value.trim() || els.gatewayUrlInput.value.trim() === DEFAULT_SETTINGS.gatewayUrl) {
+      els.gatewayUrlInput.value = summary.mode.defaultUrl || DEFAULT_SETTINGS.gatewayUrl;
+    }
+    renderGatewayHelp();
+  });
+  els.gatewayUrlInput?.addEventListener('input', renderGatewayHelp);
   for (const button of els.colorModeButtons || []) {
     button.addEventListener('click', () => setAppearanceOption('colorMode', button.dataset.colorMode));
   }
