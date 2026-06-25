@@ -104,6 +104,7 @@ export async function discoverModelsFromRegistry({
           authenticated: provider?.authenticated !== false,
           available: !unavailable.has(modelId),
           source: 'registry',
+          runtimeSelectable: true,
         });
       }
     }
@@ -159,9 +160,10 @@ export async function discoverModelsFromSessions({
         label: bucket.label,
         provider: bucket.provider,
         providerLabel: bucket.provider,
-        description: `${bucket.sessionCount} session${bucket.sessionCount === 1 ? '' : 's'} · ${(bucket.inputTokens + bucket.outputTokens).toLocaleString()} tokens`,
+        description: `Observed in ${bucket.sessionCount} session${bucket.sessionCount === 1 ? '' : 's'} · ${(bucket.inputTokens + bucket.outputTokens).toLocaleString()} tokens`,
         contextTokens: 0,
         source: 'sessions',
+        runtimeSelectable: false,
         lastSeen: bucket.lastSeen,
         sessionCount: bucket.sessionCount,
       }))

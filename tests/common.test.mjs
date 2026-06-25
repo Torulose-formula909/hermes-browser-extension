@@ -7,6 +7,7 @@ import {
   DEFAULT_SETTINGS,
   AUDIO_TRANSCRIBE_ENDPOINT,
   GATEWAY_MODES,
+  MODEL_EFFORTS,
   appendOpenAiChunkText,
   buildAudioTranscriptionBody,
   buildHermesModelOptions,
@@ -22,9 +23,11 @@ import {
   groupModelsForMenu,
   groupSessionsForMenu,
   isMicrophonePermissionError,
+  isModelRuntimeSelectable,
   isRestrictedUrl,
   microphonePermissionHelp,
   modelDisplayName,
+  modelRuntimeStatus,
   normalizeHermesModels,
   normalizeHermesProfiles,
   normalizeHermesSessions,
@@ -32,6 +35,7 @@ import {
   pairingFailureMessage,
   redactSensitiveText,
   renderMarkdown,
+  reasoningEffortShortLabel,
   skillCommandForName,
   skillSuggestionsForInput,
   shouldStopSessionPaging,
@@ -329,6 +333,8 @@ test('buildHermesModelOptions maps Browser thinking, effort, and fast controls t
   assert.equal(DEFAULT_SETTINGS.thinkingEnabled, true);
   assert.equal(DEFAULT_SETTINGS.fastMode, false);
   assert.equal(DEFAULT_SETTINGS.reasoningEffort, 'xhigh');
+  assert.equal(MODEL_EFFORTS.find((effort) => effort.value === 'xhigh')?.label, 'Max');
+  assert.equal(reasoningEffortShortLabel('xhigh'), 'Max');
   assert.equal(DEFAULT_SETTINGS.modelOptionsVersion, 2);
   assert.deepEqual(buildHermesModelOptions(DEFAULT_SETTINGS), {
     reasoning: { enabled: true, effort: 'xhigh' },
@@ -389,7 +395,7 @@ test('modelDisplayName strips only the provider prefix and preserves free model 
 
 test('groupModelsForMenu groups connected Hermes models by provider and filters search', () => {
   const models = normalizeHermesModels({ data: [
-    { id: 'openai-codex:gpt-5.5', name: 'GPT-5.5 Max', provider: 'openai-codex', provider_label: 'OpenAI Codex', context_length: 272000 },
+    { id: 'openai-codex:gpt-5.5', name: 'GPT-5.5 Large', provider: 'openai-codex', provider_label: 'OpenAI Codex', context_length: 272000 },
     { id: 'minimax:MiniMax-M3', name: 'MiniMax M3', provider: 'minimax', provider_label: 'MiniMax', context_length: 1000000 },
     { id: 'qwen:qwen3-vl-235b', name: 'Qwen3 VL:235b Med', provider: 'qwen', provider_label: 'Qwen', context_length: 262144 },
   ] }, 'openai-codex:gpt-5.5');
@@ -424,11 +430,11 @@ test('skill helpers normalize slash commands and suggest matches from / or @ inp
 });
 
 test('normalizeHermesProfiles marks active profile and keeps useful metadata', () => {
-  const profiles = normalizeHermesProfiles({ active: 'max', data: [
+  const profiles = normalizeHermesProfiles({ active: 'research', data: [
     { name: 'default', model: 'gpt-5.5', skill_count: 40, gateway_running: true },
-    { name: 'max', model: 'claude-sonnet-4.6', provider: 'anthropic', skill_count: 12 },
+    { name: 'research', model: 'claude-sonnet-4.6', provider: 'anthropic', skill_count: 12 },
   ] });
-  assert.deepEqual(profiles.map((profile) => profile.name), ['default', 'max']);
+  assert.deepEqual(profiles.map((profile) => profile.name), ['default', 'research']);
   assert.equal(profiles[0].active, false);
   assert.equal(profiles[1].active, true);
   assert.equal(profiles[1].model, 'claude-sonnet-4.6');
@@ -529,19 +535,22 @@ test('discoverModelsFromRegistry flattens /api/model/options provider inventory'
   assert.equal(result.models[0].providerLabel, 'OpenAI Codex');
   assert.equal(result.models[0].reasoning, true);
   assert.equal(result.models[0].fast, true);
+  assert.equal(result.models[0].runtimeSelectable, true);
   assert.equal(result.models[2].contextTokens, 1000000);
 });
 
 test('normalizeHermesModels preserves camelCase registry labels for grouping', () => {
   const models = normalizeHermesModels([
-    { id: 'openai-codex::gpt-5.5', rawModelId: 'gpt-5.5', label: 'GPT-5.5', provider: 'openai-codex', providerLabel: 'OpenAI Codex' },
-    { id: 'github-copilot::gpt-5.5', rawModelId: 'gpt-5.5', label: 'GPT-5.5', provider: 'github-copilot', providerLabel: 'GitHub Copilot' },
-    { id: 'minimax::MiniMax-M3', rawModelId: 'MiniMax-M3', label: 'MiniMax M3', provider: 'minimax', providerLabel: 'MiniMax' },
+    { id: 'openai-codex::gpt-5.5', rawModelId: 'gpt-5.5', label: 'GPT-5.5', provider: 'openai-codex', providerLabel: 'OpenAI Codex', source: 'registry' },
+    { id: 'github-copilot::gpt-5.5', rawModelId: 'gpt-5.5', label: 'GPT-5.5', provider: 'github-copilot', providerLabel: 'GitHub Copilot', source: 'registry' },
+    { id: 'minimax::MiniMax-M3', rawModelId: 'MiniMax-M3', label: 'MiniMax M3', provider: 'minimax', providerLabel: 'MiniMax', source: 'registry' },
   ], 'openai-codex::gpt-5.5');
   const groups = groupModelsForMenu(models, 'openai-codex::gpt-5.5');
   assert.deepEqual(groups.map((group) => group.label), ['OpenAI Codex', 'GitHub Copilot', 'MiniMax']);
   assert.equal(models[0].rawModelId, 'gpt-5.5');
   assert.equal(models[1].rawModelId, 'gpt-5.5');
+  assert.equal(isModelRuntimeSelectable(models[0]), true);
+  assert.equal(modelRuntimeStatus(models[0]).label, 'requestable');
 });
 
 test('discoverModelsFromSessions extracts unique model names from /api/sessions', async () => {
@@ -569,8 +578,11 @@ test('discoverModelsFromSessions extracts unique model names from /api/sessions'
   // Provider derived from model id
   assert.equal(result.models[0].provider, 'openai');
   assert.equal(result.models[1].provider, 'minimax');
-  // Session counts accumulated
+  // Session counts accumulated and session-history models are observed-only.
   assert.equal(result.models[1].sessionCount, 2);
+  assert.equal(result.models[1].runtimeSelectable, false);
+  assert.equal(isModelRuntimeSelectable(result.models[1]), false);
+  assert.equal(modelRuntimeStatus(result.models[1]).label, 'observed');
 });
 
 test('discoverModelsFromSessions returns ok=false with empty list on auth failure', async () => {

@@ -1286,6 +1286,11 @@ textarea:focus, input:focus, select:focus { border-color: var(--hermes-accent); 
 .model-option.selected,
 .session-option:hover,
 .session-option.selected { background: rgba(var(--hermes-fg-rgb),0.08); color: var(--hermes-fg); }
+.model-option.observed { color: rgba(var(--hermes-fg-rgb),0.72); }
+.model-option.observed .model-option-meta {
+  color: rgba(var(--hermes-fg-rgb),0.62);
+  font-style: italic;
+}
 .model-option-name,
 .session-option-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .model-option-meta,

@@ -619,6 +619,10 @@ export function normalizeHermesModels(payload = {}, selectedModel = DEFAULT_SETT
     const id = typeof item === 'string' ? item : item?.id;
     if (!id || seen.has(id)) continue;
     seen.add(id);
+    const source = typeof item === 'string' ? '' : item.source || '';
+    const runtimeSelectable = typeof item === 'string'
+      ? true
+      : item.runtimeSelectable ?? item.runtime_selectable ?? item.requestable ?? item.selectable;
     models.push({
       id,
       label: typeof item === 'string' ? item : item.label || item.name || item.id,
@@ -632,17 +636,18 @@ export function normalizeHermesModels(payload = {}, selectedModel = DEFAULT_SETT
       reasoning: typeof item === 'string' ? undefined : item.reasoning,
       authenticated: typeof item === 'string' ? undefined : item.authenticated,
       available: typeof item === 'string' ? undefined : item.available,
-      source: typeof item === 'string' ? '' : item.source || '',
+      source,
+      runtimeSelectable: typeof runtimeSelectable === 'boolean' ? runtimeSelectable : source !== 'sessions',
     });
   }
 
   const selected = String(selectedModel || DEFAULT_SETTINGS.model);
   const selectedMatchesRawModel = models.some((model) => model.rawModelId === selected);
   if (selected && !seen.has(selected) && !selectedMatchesRawModel && !(rawModels.length && selected === DEFAULT_SETTINGS.model)) {
-    models.push({ id: selected, label: selected, owner: 'selected', contextTokens: 0 });
+    models.push({ id: selected, label: selected, owner: 'selected', contextTokens: 0, source: 'selected', runtimeSelectable: false });
   }
   if (!models.length) {
-    models.push({ id: DEFAULT_SETTINGS.model, label: DEFAULT_SETTINGS.model, owner: 'default', contextTokens: 0 });
+    models.push({ id: DEFAULT_SETTINGS.model, label: DEFAULT_SETTINGS.model, owner: 'default', contextTokens: 0, source: 'default', runtimeSelectable: true });
   }
   return models;
 }
@@ -652,6 +657,25 @@ export function modelDisplayName(model = {}) {
   const provider = String(model.provider || model.owner || model.providerLabel || '').trim();
   if (provider && raw.startsWith(`${provider}:`)) return raw.slice(provider.length + 1);
   return raw;
+}
+
+export function isModelRuntimeSelectable(model = {}) {
+  if (!model || typeof model !== 'object') return false;
+  if (model.runtimeSelectable === false || model.runtime_selectable === false || model.requestable === false) return false;
+  return model.source !== 'sessions' && model.source !== 'observed';
+}
+
+export function modelRuntimeStatus(model = {}) {
+  if (isModelRuntimeSelectable(model)) {
+    return {
+      label: model.source === 'registry' ? 'requestable' : 'default',
+      detail: 'The extension will send this model/provider in the Hermes request body.',
+    };
+  }
+  return {
+    label: 'observed',
+    detail: 'Observed from session history. The extension will send this model/provider, but older Hermes gateways may ignore per-request overrides and use their configured model.',
+  };
 }
 
 export function groupModelsForMenu(models = [], selectedModel = DEFAULT_SETTINGS.model, query = '') {

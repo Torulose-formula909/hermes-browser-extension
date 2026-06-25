@@ -18,10 +18,12 @@ import {
   groupModelsForMenu,
   groupSessionsForMenu,
   isMicrophonePermissionError,
+  isModelRuntimeSelectable,
   isRestrictedUrl,
   isUsableRemoteGatewayUrl,
   microphonePermissionHelp,
   modelDisplayName,
+  modelRuntimeStatus,
   normalizeHermesModels,
   normalizeHermesProfiles,
   normalizeHermesSessions,
@@ -1274,8 +1276,9 @@ function renderModelOptions(models = availableModels) {
     if (!selectedModelProvider || !normalized.some((model) => modelProviderLabel(model) === selectedModelProvider)) {
       selectedModelProvider = providerLabel;
     }
+    const runtimeStatus = modelRuntimeStatus(selected);
     els.currentModelName.textContent = modelDisplayName(selected);
-    els.currentModelName.title = `${selected.providerLabel || selected.provider || ''} ${selected.id}`.trim();
+    els.currentModelName.title = `${selected.providerLabel || selected.provider || ''} ${selected.rawModelId || selected.id} · ${runtimeStatus.detail}`.trim();
     updateModelButtonMeta();
   }
   renderModelMenu();
@@ -1347,10 +1350,13 @@ function renderModelMenu(query = els.modelSearchInput?.value || '') {
     els.modelMenuList.appendChild(title);
 
     for (const model of group.models) {
+      const runtimeStatus = modelRuntimeStatus(model);
+      const requestable = isModelRuntimeSelectable(model);
       const button = document.createElement('button');
       button.type = 'button';
-      button.className = `model-option ${model.selected ? 'selected' : ''}`.trim();
+      button.className = `model-option ${model.selected ? 'selected' : ''} ${requestable ? '' : 'observed'}`.trim();
       button.dataset.modelId = model.id;
+      button.title = runtimeStatus.detail;
 
       const name = document.createElement('span');
       name.className = 'model-option-name';
@@ -1358,7 +1364,7 @@ function renderModelMenu(query = els.modelSearchInput?.value || '') {
 
       const meta = document.createElement('span');
       meta.className = 'model-option-meta';
-      meta.textContent = model.selected ? '✓' : (model.contextTokens ? formatTokens(model.contextTokens).replace(' tokens', '') : '');
+      meta.textContent = model.selected ? '✓' : (!requestable ? 'observed' : (model.contextTokens ? formatTokens(model.contextTokens).replace(' tokens', '') : runtimeStatus.label));
 
       button.append(name, meta);
       button.addEventListener('click', () => applySelectedModel(model.id, { keepOpen: true }));
@@ -1471,7 +1477,14 @@ function applySelectedModel(selectedId, { persist = true, keepOpen = false } = {
     els.modelMenuButton.setAttribute('aria-expanded', 'false');
   }
   if (persist) chrome.storage.local.set({ hermesBrowserSettings: settings });
-  if (persist && selected) setStatus('ok', 'Hermes model selected', `${modelProviderLabel(selected)} · ${modelDisplayName(selected)}`);
+  if (persist && selected) {
+    const status = modelRuntimeStatus(selected);
+    if (!isModelRuntimeSelectable(selected)) {
+      setStatus('warn', 'Observed model selected', `${modelProviderLabel(selected)} · ${modelDisplayName(selected)}. ${status.detail}`);
+    } else {
+      setStatus('ok', 'Hermes model selected', `${modelProviderLabel(selected)} · ${modelDisplayName(selected)}`);
+    }
+  }
 }
 
 async function loadModels({ quiet = false, payload = null } = {}) {
@@ -2955,6 +2968,10 @@ async function askHermes(userText, turnAttachments = [...attachments]) {
   }
 
   sending = true;
+  const selectedModel = currentSelectedModel();
+  if (selectedModel && !isModelRuntimeSelectable(selectedModel)) {
+    setStatus('warn', 'Sending observed model request', `${modelDisplayName(selectedModel)} was discovered from session history. The extension will request it, but the connected Hermes gateway may use its configured model if it does not support per-request overrides.`);
+  }
   activeAbortController = new AbortController();
   activeRunId = '';
   updateComposerBusyState();
